@@ -28,12 +28,9 @@ export const uploadMultiple = async (files) => {
     try {
       const result = await uploadToCloudinary(file.buffer);
       return {
-        originalName: file.originalname,
-        publicId: result.public_id,
-        url: result.secure_url,
-        format: result.format,
-        duration: result.duration,
-        size: result.bytes,
+        ...result,
+        buffer: file.buffer,
+        mimetype: file.mimetype,
       };
     } catch (error) {
       console.error(`Error uploading ${file.originalname}:`, error);

@@ -13,6 +13,8 @@ import {
   checkFilesUploaded,
   parseMetadata,
 } from "../middlewares/validateSchema.middleware.js";
+import { getMetadataForSongs } from "../utils/getMetaData.js";
+import songMetadataSchema from "../models/song.model.js";
 
 const router = express.Router();
 const upload = multer({
@@ -25,7 +27,6 @@ const upload = multer({
 router.get("/", async (req, res) => {
   const { name } = req.query;
   if (name) {
-    console.log("name", name);
     const result = await findSongByName(req.query.name);
     return res.status(StatusCodes.OK).send({
       status: "success",
@@ -60,21 +61,37 @@ router.post(
   async (req, res) => {
     try {
       const { successes, failures } = await uploadMultiple(req.files);
-      const { listMetadata } = req.body;
 
-      console.log("listMetadata", listMetadata);
-      console.log("successes", successes);
+      const listMetadata = await getMetadataForSongs(successes);
 
       const listToInsert = listMetadata.map((item, index) => {
+        const successItem = successes[index];
         return {
-          ...successes[index],
-          originalName: item.common.title + ".mp3",
+          originalName: item.metadata.common.title + "." + successItem.format,
+          asset_id: successItem.asset_id,
+          publicId: successItem.public_id,
+          url: successItem.url,
+          secure_url: successItem.secure_url,
+          playback_url: successItem.playback_url,
+          format: successItem.format,
+          duration: successItem.duration,
+          buffer: successItem.buffer,
+          mimetype: successItem.mimetype,
           metadata: {
             format: {
-              ...item.format,
+              tagTypes: item.metadata.format.tagTypes,
+              codec: item.metadata.format.codec,
+              sampleRate: item.metadata.format.sampleRate,
+              bitrate: item.metadata.format.bitrate,
+              duration: item.metadata.format.duration,
             },
             common: {
-              ...item.common,
+              title: item.metadata.common.title,
+              artists: item.metadata.common.artists,
+              artist: item.metadata.common.artist,
+              album: item.metadata.common.album,
+              year: item.metadata.common.year,
+              picture: item.metadata.common.picture,
             },
           },
         };
@@ -82,12 +99,16 @@ router.post(
 
       console.log("listToInsert", listToInsert);
 
+      await Promise.all(
+        listToInsert.map(async (item) => {
+          return await songMetadataSchema.validate(item);
+        })
+      );
+
       const insertResult = await insertSongs(listToInsert);
 
-      // Trả về kết quả
-      res.json({
+      return res.status(StatusCodes.OK).send({
         success: true,
-        message: "Files processed",
         totalProcessed: successes.length + failures.length,
         successCount: successes.length,
         failureCount: failures.length,
@@ -96,10 +117,12 @@ router.post(
         insertResult,
       });
     } catch (error) {
-      console.error("Upload error:", error);
-      res.status(500).json({
+      console.error(error);
+      res.status(StatusCodes.BAD_REQUEST).send({
         success: false,
+        code: StatusCodes.BAD_REQUEST,
         message: error.message || "Internal server error",
+        error,
       });
     }
   }
@@ -112,23 +135,6 @@ router.delete("/:songId", async (req, res) => {
     statusCode: StatusCodes.OK,
     message: "Song Removed Successfully",
     result,
-  });
-});
-
-// eslint-disable-next-line no-unused-vars
-router.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({
-        success: false,
-        message: "File too large. Maximum size is 20MB",
-      });
-    }
-  }
-
-  res.status(500).json({
-    success: false,
-    message: error.message || "Something went wrong",
   });
 });
 

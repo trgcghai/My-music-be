@@ -1,9 +1,6 @@
-import { getMetadataForSongs } from "../utils/getMetaData.js";
-import {
-  getCommonData,
-  getFormatData,
-} from "../utils/filterDataFromMetadata.js";
-import { StatusCodes } from "http-status-codes";
+import {getMetadataForSongs} from "../utils/getMetaData.js";
+import {getCommonData, getFormatData,} from "../utils/filterDataFromMetadata.js";
+import {StatusCodes} from "http-status-codes";
 import playlistSchema from "../models/playlist.model.js";
 import accountSchema from "../models/account.model.js";
 
@@ -49,8 +46,7 @@ export async function validatePlaylistSchema(req, res, next) {
       },
     };
 
-    const data = await playlistSchema.validate(object);
-    req.body.playlist = data;
+    req.body.playlist = await playlistSchema.validate(object);
   } catch (error) {
     console.error(error);
     return res.status(StatusCodes.BAD_REQUEST).send({
@@ -106,8 +102,7 @@ export async function validateAccountSchema(req, res, next) {
         });
     }
 
-    const data = await accountSchema.validate(object);
-    req.body.formData = data;
+    req.body.formData = await accountSchema.validate(object);
   } catch (error) {
     console.error(error);
     return res.status(StatusCodes.BAD_REQUEST).send({
@@ -134,7 +129,7 @@ export async function checkAddSongToPlaylist(req, res, next) {
 
   console.log({ listPlaylists, songId });
 
-  if (listPlaylists.length == 0) {
+  if (listPlaylists.length === 0) {
     return res.status(StatusCodes.OK).send({
       status: "ok",
       statusCode: StatusCodes.OK,

@@ -143,4 +143,39 @@ router.post("/removeSong", async (req, res) => {
   }
 });
 
+router.post(
+  "/createPlaylistWithSong",
+  validatePlaylistSchema,
+  async (req, res) => {
+    try {
+      const { playlist, songId } = req.body;
+
+      const song = await findSongById(songId);
+
+      if (!song) {
+        return res.status(StatusCodes.BAD_REQUEST).send({
+          status: "failure",
+          code: StatusCodes.BAD_REQUEST,
+          message: "Song not found",
+        });
+      }
+
+      playlist.songs.push(song[0]);
+      const result = await insertPlaylist([playlist]);
+
+      return res.status(StatusCodes.OK).send({
+        status: "success",
+        code: StatusCodes.OK,
+        result,
+      });
+    } catch (error) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send({
+        status: "failed",
+        code: StatusCodes.INTERNAL_SERVER_ERROR,
+        result: error,
+      });
+    }
+  }
+);
+
 export default router;
