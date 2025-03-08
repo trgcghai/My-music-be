@@ -3,6 +3,7 @@ import helmet from "helmet";
 import compression from "compression";
 import { rateLimit } from "express-rate-limit";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import "dotenv/config";
 
 import songRoutes from "./routes/song.routes.js";
@@ -23,8 +24,12 @@ const limiter = rateLimit({
 app.use(compression());
 app.use(limiter);
 app.use(express.json());
+app.use(cookieParser())
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true
+}));
 
 app.use("/api/v1", pingRoutes);
 app.use("/api/v1/song", songRoutes);

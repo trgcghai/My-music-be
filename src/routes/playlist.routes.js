@@ -173,7 +173,7 @@ router.post(
         status: "failed",
         code: StatusCodes.INTERNAL_SERVER_ERROR,
         result: error,
-      });
+      })
     }
   }
 );

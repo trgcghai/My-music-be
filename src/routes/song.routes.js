@@ -53,6 +53,21 @@ router.get("/:id", async (req, res) => {
   });
 });
 
+router.post("/getByListId", async (req, res) => {
+  const { listId } = req.body;
+
+  console.log("listId", listId);
+
+  const setIds = new Set(listId);
+
+  console.log("setIds", setIds);
+
+  return res.status(StatusCodes.OK).send({
+    status: "success",
+    code: StatusCodes.OK,
+  });
+});
+
 router.post(
   "/",
   upload.array("files"),
@@ -96,8 +111,6 @@ router.post(
           },
         };
       });
-
-      console.log("listToInsert", listToInsert);
 
       await Promise.all(
         listToInsert.map(async (item) => {

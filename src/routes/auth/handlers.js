@@ -15,34 +15,64 @@ import { sendMail } from "../../services/mail.service.js";
 import admin from "firebase-admin";
 
 export const loginHandler = async (req, res) => {
-  const { email, password } = req.body.formData;
+  try {
+    const { email, password } = req.body.formData;
 
-  const isValid = await authLogin(email, password);
-  const account = await findAccountByEmail(email);
+    const isValid = await authLogin(email, password);
 
-  const { accessToken, refreshToken } = await generateTokens(account);
+    if (!isValid) {
+      return res.status(StatusCodes.BAD_REQUEST).send({
+        status: "failed",
+        code: StatusCodes.BAD_REQUEST,
+        message: "Login failed",
+      });
+    }
 
-  if (isValid) {
+    const account = await findAccountByEmail(email);
+
+    if (!account) {
+      return res.status(StatusCodes.BAD_REQUEST).send({
+        status: "failed",
+        code: StatusCodes.BAD_REQUEST,
+        message: "Account not found",
+      });
+    }
+
+    const { accessToken, refreshToken } = await generateTokens(account);
+
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 30 * 60 * 1000 // 20 minutes
+    })
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 ngày
+    });
+
     return res.status(StatusCodes.OK).send({
       status: "success",
       code: StatusCodes.OK,
       message: "Login successfully",
       data: {
-        accessToken,
-        refreshToken,
         userInfo: {
           email: account.email,
           username: account.username,
         },
       },
     });
+  } catch (error) {
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      status: "failed",
+      code: StatusCodes.BAD_REQUEST,
+      message: "Login failed",
+      error
+    });
   }
-
-  return res.status(StatusCodes.BAD_REQUEST).send({
-    status: "failed",
-    code: StatusCodes.BAD_REQUEST,
-    message: "Login failed",
-  });
 };
 
 export const registerHandler = async (req, res) => {
@@ -171,13 +201,17 @@ export const verifyOtpHandler = async (req, res) => {
 
 export const verifyTokenHandler = async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    const decoded = await verifyAccessToken(token);
+    console.log("check req.cookies from verifyTokenHandler", req.cookies);
+    console.log("check req.cookie from verifyTokenHandler", req.cookie);
+    const accessToken = req.cookies.accessToken;
+    console.log("check accessToken from verifyTokenHandler", accessToken);
+    const result = await verifyAccessToken(accessToken);
+    console.log("result from verifyTokenHandler", result);
     return res.status(StatusCodes.OK).send({
       status: "success",
       code: StatusCodes.OK,
       message: "Token is valid",
-      userInfo: decoded,
+      result,
     });
   } catch (error) {
     console.error(error);
@@ -192,18 +226,38 @@ export const verifyTokenHandler = async (req, res) => {
 
 export const refreshAccessTokenHandler = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(StatusCodes.UNAUTHORIZED).send({
+        status: "failed",
+        code: StatusCodes.UNAUTHORIZED,
+        message: "Refresh token is required",
+      })
+    }
+
     const accessToken = await refreshAccessToken(refreshToken);
+
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 30 * 60 * 1000 // 30 minutes
+    })
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 ngày
+    });
 
     return res.status(StatusCodes.OK).send({
       status: "success",
       code: StatusCodes.OK,
       message: "Refresh token successfully",
-      accessToken,
-      refreshToken,
     });
   } catch (error) {
-    console.error(error);
     return res.status(StatusCodes.UNAUTHORIZED).send({
       status: "failed",
       code: StatusCodes.UNAUTHORIZED,
