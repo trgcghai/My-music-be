@@ -12,7 +12,7 @@ import {
   insertAccount,
 } from "../../services/account.service.js";
 import { sendMail } from "../../services/mail.service.js";
-import admin from "firebase-admin";
+import accountSchema from "../../models/account.model.js";
 
 export const loginHandler = async (req, res) => {
   try {
@@ -40,18 +40,18 @@ export const loginHandler = async (req, res) => {
 
     const { accessToken, refreshToken } = await generateTokens(account);
 
-    res.cookie('accessToken', accessToken, {
+    res.cookie("accessToken", accessToken, {
       httpOnly: true,
       sameSite: "none",
       secure: true,
-      maxAge: 30 * 60 * 1000 // 20 minutes
-    })
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       sameSite: "none",
       secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 ngày
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
     });
 
     return res.status(StatusCodes.OK).send({
@@ -62,6 +62,7 @@ export const loginHandler = async (req, res) => {
         userInfo: {
           email: account.email,
           username: account.username,
+          avatar: account.avatar,
         },
       },
     });
@@ -70,7 +71,7 @@ export const loginHandler = async (req, res) => {
       status: "failed",
       code: StatusCodes.BAD_REQUEST,
       message: "Login failed",
-      error
+      error,
     });
   }
 };
@@ -78,7 +79,25 @@ export const loginHandler = async (req, res) => {
 export const registerHandler = async (req, res) => {
   try {
     const { email, username, password, providerId } = req.body.formData;
-    await insertAccount([{ email, username, password, providerId }]);
+    const account = {
+      email,
+      username,
+      password,
+      avatar: "",
+      providerId,
+      createdAt: new Date(),
+      lastModified: new Date(),
+    };
+
+    if (!accountSchema.validate(account)) {
+      return res.status(StatusCodes.BAD_REQUEST).send({
+        status: "failed",
+        code: StatusCodes.BAD_REQUEST,
+        message: "Invalid account information",
+      });
+    }
+
+    await insertAccount([account]);
     const { otp } = await createOtp(email);
 
     await sendMail({
@@ -172,41 +191,62 @@ export const sendOtpHandler = async (req, res) => {
 };
 
 export const verifyOtpHandler = async (req, res) => {
-  const { email, otp } = req.body;
-  const isValid = await verifyOtp(email, otp);
-  if (isValid) {
+  try {
+    const { email, otp } = req.body;
+    const isValid = await verifyOtp(email, otp);
+
+    if (!isValid) {
+      return res.status(StatusCodes.BAD_REQUEST).send({
+        status: "failed",
+        code: StatusCodes.BAD_REQUEST,
+        message: "OTP is invalid or expired",
+      });
+    }
+
     const account = await findAccountByEmail(email);
     const { accessToken, refreshToken } = await generateTokens(account);
+
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
+    });
 
     return res.status(StatusCodes.OK).send({
       status: "success",
       code: StatusCodes.OK,
       message: "Valid OTP, login successfully",
       data: {
-        accessToken,
-        refreshToken,
         userInfo: {
           email: account.email,
           username: account.username,
+          avatar: account.avatar,
         },
       },
     });
+  } catch (error) {
+    console.error(error);
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      status: "failed",
+      code: StatusCodes.BAD_REQUEST,
+      message: "Something went wrong",
+      error,
+    });
   }
-  return res.status(StatusCodes.BAD_REQUEST).send({
-    status: "failed",
-    statusCode: StatusCodes.BAD_REQUEST,
-    message: "OTP is invalid or expired",
-  });
 };
 
 export const verifyTokenHandler = async (req, res) => {
   try {
-    console.log("check req.cookies from verifyTokenHandler", req.cookies);
-    console.log("check req.cookie from verifyTokenHandler", req.cookie);
     const accessToken = req.cookies.accessToken;
-    console.log("check accessToken from verifyTokenHandler", accessToken);
     const result = await verifyAccessToken(accessToken);
-    console.log("result from verifyTokenHandler", result);
     return res.status(StatusCodes.OK).send({
       status: "success",
       code: StatusCodes.OK,
@@ -233,23 +273,23 @@ export const refreshAccessTokenHandler = async (req, res) => {
         status: "failed",
         code: StatusCodes.UNAUTHORIZED,
         message: "Refresh token is required",
-      })
+      });
     }
 
     const accessToken = await refreshAccessToken(refreshToken);
 
-    res.cookie('accessToken', accessToken, {
+    res.cookie("accessToken", accessToken, {
       httpOnly: true,
       sameSite: "none",
       secure: true,
-      maxAge: 30 * 60 * 1000 // 30 minutes
-    })
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
 
-    res.cookie('refreshToken', refreshToken, {
+    res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       sameSite: "none",
       secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 ngày
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
     });
 
     return res.status(StatusCodes.OK).send({
@@ -262,20 +302,86 @@ export const refreshAccessTokenHandler = async (req, res) => {
       status: "failed",
       code: StatusCodes.UNAUTHORIZED,
       message: "Refresh token failed",
+      error,
     });
   }
 };
 
-export const googleSigninHandler = async (req, res) => {
-  const { idToken } = req.body;
+export const handleLogout = async (req, res) => {
+  try {
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
 
-  const decodedToken = await admin.auth().verifyIdToken(idToken);
-  console.log(decodedToken);
+    return res.status(StatusCodes.OK).send({
+      status: "success",
+      code: StatusCodes.OK,
+      message: "Logout successfully",
+    });
+  } catch (error) {
+    return res.status(StatusCodes.UNAUTHORIZED).send({
+      status: "failed",
+      code: StatusCodes.UNAUTHORIZED,
+      message: "Logout failed",
+      error,
+    });
+  }
+};
 
-  return res.status(StatusCodes.OK).send({
-    status: "success",
-    code: StatusCodes.OK,
-    message: "Auth with google successfully",
-    decodedToken,
-  });
+export const googleLoginHandler = async (req, res) => {
+  try {
+    const { user } = req.body;
+    const { email, displayName, photoURL, providerData } = user;
+
+    let account = await findAccountByEmail(email);
+
+    if (!account) {
+      account = {
+        email,
+        username: displayName,
+        avatar: photoURL,
+        providerId: providerData[0].providerId,
+        createdAt: new Date(),
+        lastModified: new Date(),
+      };
+      if (accountSchema.validate(account)) {
+        await insertAccount([account]);
+      }
+    }
+
+    const { accessToken, refreshToken } = await generateTokens(account);
+
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
+    });
+
+    return res.status(StatusCodes.OK).send({
+      status: "success",
+      code: StatusCodes.OK,
+      message: "Login successfully",
+      data: {
+        userInfo: {
+          email,
+          username: displayName,
+          avatar: photoURL,
+        },
+      },
+    });
+  } catch (error) {
+    return res.status(StatusCodes.BAD_REQUEST).send({
+      status: "failed",
+      code: StatusCodes.BAD_REQUEST,
+      message: "Login failed",
+      error,
+    });
+  }
 };

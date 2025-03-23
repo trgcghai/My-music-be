@@ -1,10 +1,10 @@
 /* eslint-disable no-undef */
-import {findAccountByEmail} from "./account.service.js";
-import {authenticator} from "otplib";
-import {getDb} from "../configs/dbConfig.js";
+import { findAccountByEmail } from "./account.service.js";
+import { authenticator } from "otplib";
+import { getDb } from "../configs/dbConfig.js";
 import pkg from "crypto-js";
 import jwt from "jsonwebtoken";
-import {ObjectId} from "mongodb";
+import { ObjectId } from "mongodb";
 
 const { SHA256 } = pkg;
 
@@ -112,12 +112,12 @@ export async function refreshAccessToken(refreshToken) {
   try {
     const account = await verifyRefreshToken(refreshToken);
     return jwt.sign(
-        {
-          email: account.email,
-          username: account.username,
-        },
-        process.env.ACCESS_SECRET,
-        {expiresIn: "30m"}
+      {
+        email: account.email,
+        username: account.username,
+      },
+      process.env.ACCESS_SECRET,
+      { expiresIn: "30m" }
     );
   } catch (error) {
     console.error(error);

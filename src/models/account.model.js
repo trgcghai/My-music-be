@@ -4,6 +4,7 @@ const accountSchema = object({
   username: string().trim().required(),
   email: string().email().required(),
   password: string().nullable(),
+  avatar: string().nullable(),
   providerId: string().required(),
   createdAt: date().default(() => new Date()),
   lastModified: date().default(() => new Date()),

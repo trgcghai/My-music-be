@@ -1,6 +1,7 @@
 import express from "express";
 import {
-  googleSigninHandler,
+  googleLoginHandler,
+  handleLogout,
   loginHandler,
   refreshAccessTokenHandler,
   registerHandler,
@@ -32,6 +33,8 @@ router.get("/verify-token", verifyTokenHandler);
 
 router.post("/refresh-token", refreshAccessTokenHandler);
 
-router.post("/google-signin", googleSigninHandler);
+router.post("/logout", handleLogout);
+
+router.post("/google-login", googleLoginHandler);
 
 export default router;
